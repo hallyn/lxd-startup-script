@@ -1,0 +1,42 @@
+#!/bin/bash
+
+[ -z $HOME ] && HOME=/root
+
+# XXX Do this only on hosts which have apt-cacher-ng
+cat > /etc/apt/apt.conf.d/01proxy << EOF
+Acquire::http::Proxy "http://192.168.122.1:3142";
+EOF
+# XXX end XXX
+
+# install lxd
+sudo apt-get update
+sudo apt-get -y install golang tmux mercurial pkg-config lxc-dev
+export GOPATH=$HOME/go
+go get github.com/lxc/lxd
+go get golang.org/x/crypto/ssh/terminal
+go get code.google.com/p/go-uuid/uuid
+go get github.com/gorilla/mux
+go get github.com/kr/pty
+go get gopkg.in/tomb.v2
+cd $GOPATH/src/github.com/lxc/lxd
+make
+
+# create an upstart job
+cat > /etc/init/lxd.conf << EOF
+description "lxd"
+
+start on runlevel [2345]
+stop on starting rc RUNLEVEL=[016]
+
+script
+	cd /root/go/src/github.com/lxc/lxd/lxd
+	./lxd --debug --tcp 0.0.0.0:8431
+end script
+EOF
+
+sudo usermod -v 200000-300000 -w 20000-300000 root
+# start lxd daemon
+start lxd
+
+# let client know we are ready
+touch /lxd.done
